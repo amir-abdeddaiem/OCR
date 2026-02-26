@@ -1,0 +1,927 @@
+================================================================================
+           EXPLICATION COMPLÈTE ET DÉTAILLÉE DU FICHIER main.py
+              (Programme OCR - Extraction de texte depuis images/PDF)
+================================================================================
+
+Auteur de l'explication : GitHub Copilot
+Date : 26 février 2026
+
+Ce document explique CHAQUE ligne du code main.py pour un débutant complet
+en Python et en informatique. Prends ton temps pour lire, c'est normal
+si tout n'est pas clair du premier coup !
+
+================================================================================
+TABLE DES MATIÈRES
+================================================================================
+1. C'est quoi ce programme ?
+2. Vocabulaire de base
+3. Explication ligne par ligne
+   3.1  Les imports (lignes 1-12)
+   3.2  Fonction _is_pdf (lignes 15-16)
+   3.3  Fonction _load_images_from_pdf (lignes 19-57)
+   3.4  Fonction _load_images (lignes 60-72)
+   3.5  Fonction _preprocess_for_ocr (lignes 75-101)
+   3.6  Fonction _paddle_is_usable (lignes 104-111)
+   3.7  Fonction _create_paddle_ocr (lignes 114-121)
+   3.8  Fonction _windows_ocr_available (lignes 124-134)
+   3.9  Fonction _windows_ocr_image_text (lignes 137-193)
+   3.10 Fonction _extract_text_from_paddle_result (lignes 196-243)
+   3.11 Fonction main (lignes 246-308)
+   3.12 Le point d'entrée (lignes 311-312)
+4. Comment utiliser le programme
+5. Résumé du flux complet
+
+================================================================================
+1. C'EST QUOI CE PROGRAMME ?
+================================================================================
+
+Ce programme fait de l'OCR. OCR signifie "Optical Character Recognition"
+(Reconnaissance Optique de Caractères). En gros, il prend une IMAGE ou un
+fichier PDF, il "regarde" le texte qui est dessiné dessus (comme un humain
+lirait une photo d'un document), et il le convertit en TEXTE que l'ordinateur
+peut comprendre et manipuler.
+
+Exemple concret :
+  - Tu as un CV en PDF scanné (c'est une image, pas du texte sélectionnable)
+  - Tu lances ce programme
+  - Il te sort le texte du CV dans un fichier .txt
+
+Le programme supporte DEUX moteurs d'OCR :
+  1. PaddleOCR : un moteur OCR puissant basé sur l'intelligence artificielle
+     (nécessite Python 3.10 ou 3.11)
+  2. Windows OCR : le moteur OCR intégré à Windows 10/11
+     (fonctionne avec n'importe quel Python sur Windows)
+
+================================================================================
+2. VOCABULAIRE DE BASE
+================================================================================
+
+Avant de plonger dans le code, voici les mots importants :
+
+- VARIABLE : Un "nom" qui stocke une valeur. Ex: age = 25
+  "age" est la variable, 25 est la valeur.
+
+- FONCTION : Un bloc de code réutilisable qui fait une tâche précise.
+  On la "définit" avec "def" et on l'"appelle" avec son nom suivi de ().
+  Ex: def dire_bonjour():  → définition
+      dire_bonjour()       → appel
+
+- PARAMÈTRE : Une valeur qu'on passe à une fonction.
+  Ex: def saluer(nom):  → "nom" est un paramètre
+      saluer("Alice")   → "Alice" est la valeur passée
+
+- TYPE : Le "genre" d'une donnée. Ex: str = texte, int = nombre entier,
+  bool = vrai/faux, list = liste d'éléments.
+
+- IMPORT : Charger une bibliothèque (un ensemble de code écrit par d'autres)
+  pour l'utiliser dans notre programme.
+
+- BIBLIOTHÈQUE (ou module/package) : Du code déjà écrit par d'autres
+  développeurs qu'on peut réutiliser. Ex: cv2 pour traiter les images.
+
+- TABLEAU NUMPY (np.ndarray) : Une façon efficace de stocker des images
+  en mémoire. Une image couleur est un tableau 3D :
+  hauteur × largeur × 3 canaux (Bleu, Vert, Rouge).
+
+- BGR vs RGB : Deux façons d'ordonner les couleurs.
+  RGB = Rouge-Vert-Bleu (standard courant)
+  BGR = Bleu-Vert-Rouge (utilisé par OpenCV)
+
+- try/except : Un mécanisme pour "essayer" du code et "attraper" les erreurs
+  sans que le programme plante brutalement.
+
+- async/await : Un mécanisme pour exécuter du code qui prend du temps
+  (comme lire un fichier) sans bloquer tout le programme. C'est de la
+  "programmation asynchrone".
+
+================================================================================
+3. EXPLICATION LIGNE PAR LIGNE
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 LES IMPORTS (lignes 1 à 12)
+--------------------------------------------------------------------------------
+
+```python
+import argparse
+```
+→ "argparse" est une bibliothèque INTÉGRÉE à Python (pas besoin de l'installer).
+  Elle sert à lire les ARGUMENTS qu'on tape dans le terminal.
+  Exemple : quand tu tapes "python main.py -i cv.pdf -l fr", argparse comprend
+  que -i veut dire "input" et que sa valeur est "cv.pdf".
+
+```python
+import os
+```
+→ "os" est une bibliothèque intégrée qui permet d'interagir avec le SYSTÈME
+  D'EXPLOITATION (Operating System). Ici on l'utilise pour :
+  - Vérifier si un fichier existe (os.path.exists)
+  - Extraire l'extension d'un fichier (os.path.splitext)
+
+```python
+import sys
+```
+→ "sys" est une bibliothèque intégrée qui donne accès au SYSTÈME Python.
+  Ici on l'utilise pour :
+  - Savoir sur quel OS on tourne (sys.platform → "win32" pour Windows)
+
+```python
+from typing import List, Optional
+```
+→ "typing" sert à indiquer les TYPES des variables dans le code.
+  C'est comme des étiquettes : ça ne change pas le fonctionnement, mais ça
+  aide les développeurs à comprendre le code.
+  - List[str] → "une liste de textes"
+  - Optional[int] → "un entier OU rien (None)"
+
+```python
+import cv2
+```
+→ "cv2" est la bibliothèque OpenCV (Open Computer Vision). C'est LA référence
+  pour manipuler des images en Python. On l'utilise ici pour :
+  - Lire des images depuis des fichiers
+  - Convertir les couleurs (RGB ↔ BGR ↔ Gris)
+  - Redimensionner, flouter, binariser des images
+  - Encoder des images en PNG
+
+```python
+import numpy as np
+```
+→ "numpy" est LA bibliothèque pour les calculs mathématiques en Python.
+  "as np" veut dire "on lui donne le surnom np" pour écrire moins.
+  Ici on l'utilise car les images sont stockées comme des tableaux numpy.
+
+```python
+try:
+    from paddleocr import PaddleOCR
+except Exception:
+    PaddleOCR = None
+```
+→ Ce bloc "try/except" essaie d'importer PaddleOCR.
+  - SI ça marche : PaddleOCR est disponible, on peut l'utiliser.
+  - SI ça échoue (module pas installé) : on met PaddleOCR = None
+    (None = "rien", ça veut dire "pas disponible").
+  Le programme ne plante PAS, il note juste que PaddleOCR n'est pas là.
+
+--------------------------------------------------------------------------------
+3.2 FONCTION _is_pdf (lignes 15-16)
+--------------------------------------------------------------------------------
+
+```python
+def _is_pdf(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() == ".pdf"
+```
+
+EXPLICATION :
+- "def" → on définit une nouvelle fonction
+- "_is_pdf" → le nom de la fonction. Le "_" au début est une CONVENTION
+  qui signifie "cette fonction est privée / interne" (pas faite pour être
+  appelée de l'extérieur).
+- "(path: str)" → elle prend un paramètre "path" (chemin du fichier),
+  qui est de type str (texte).
+- "-> bool" → elle retourne un booléen (True ou False).
+
+CE QUE FAIT LA FONCTION :
+- os.path.splitext("cv.pdf") retourne ("cv", ".pdf")
+  → ça sépare le nom de l'extension
+- [1] prend le 2e élément → ".pdf"
+- .lower() met en minuscules → ".pdf" (utile si le fichier s'appelle "CV.PDF")
+- == ".pdf" compare : est-ce que c'est un PDF ?
+- Retourne True (oui) ou False (non)
+
+EXEMPLE :
+  _is_pdf("mon_cv.pdf")  → True
+  _is_pdf("photo.jpg")   → False
+  _is_pdf("DOC.PDF")     → True (grâce à .lower())
+
+--------------------------------------------------------------------------------
+3.3 FONCTION _load_images_from_pdf (lignes 19-57)
+--------------------------------------------------------------------------------
+
+```python
+def _load_images_from_pdf(pdf_path: str, max_pages: Optional[int]) -> List[np.ndarray]:
+```
+→ Cette fonction charge un PDF et convertit ses pages en IMAGES.
+  - pdf_path : chemin vers le fichier PDF
+  - max_pages : nombre maximum de pages à lire (ou None = toutes)
+  - Retourne une LISTE d'images (chaque image est un tableau numpy)
+
+```python
+    try:
+        import fitz  # PyMuPDF
+    except Exception as exc:
+        raise SystemExit(...)
+```
+→ On essaie d'importer "fitz", qui est le nom de code de la bibliothèque
+  PyMuPDF (elle sert à lire les PDF).
+  Si PyMuPDF n'est pas installé, le programme s'arrête avec un message
+  d'erreur clair qui dit comment l'installer.
+  "raise SystemExit(...)" = arrêter le programme et afficher un message.
+
+```python
+    doc = fitz.open(pdf_path)
+```
+→ Ouvre le fichier PDF. "doc" est maintenant un objet qui représente
+  le document PDF en mémoire.
+
+```python
+    images: List[np.ndarray] = []
+```
+→ Crée une liste VIDE qui va stocker les images des pages.
+  "List[np.ndarray]" est juste un indice de type pour dire "liste d'images".
+
+```python
+    page_count = len(doc)
+    if page_count == 0:
+        return images
+```
+→ len(doc) = nombre de pages dans le PDF.
+  Si le PDF est vide (0 pages), on retourne la liste vide tout de suite.
+
+```python
+    pages_to_read = page_count
+    if max_pages is not None:
+        pages_to_read = min(pages_to_read, max_pages)
+```
+→ On détermine combien de pages lire.
+  - Par défaut : toutes les pages
+  - Si l'utilisateur a demandé un maximum (ex: --max-pages 1),
+    on prend le plus petit entre le total et le maximum demandé.
+  min(5, 1) = 1 → on ne lira qu'une page même s'il y en a 5.
+
+```python
+    mat = fitz.Matrix(2, 2)
+```
+→ Crée une MATRICE de zoom 2×2. Cela double la résolution de l'image.
+  Pourquoi ? Parce que l'OCR fonctionne mieux avec des images en haute
+  résolution (200-300 DPI au lieu de 72 DPI par défaut).
+  DPI = "Dots Per Inch" = points par pouce = mesure de résolution.
+
+```python
+    for i in range(pages_to_read):
+```
+→ Boucle "for" : on répète le bloc pour chaque page.
+  range(3) → donne 0, 1, 2 → on traite les pages 0, 1, 2.
+
+```python
+        page = doc.load_page(i)
+```
+→ Charge la page numéro "i" du PDF.
+
+```python
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+```
+→ Convertit la page en image (pixmap = carte de pixels).
+  - matrix=mat → applique le zoom 2×
+  - alpha=False → pas de transparence (on n'en a pas besoin)
+
+```python
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+```
+→ Convertit les données brutes de l'image en tableau numpy.
+  - pix.samples → les octets bruts des pixels
+  - dtype=np.uint8 → chaque valeur est un entier de 0 à 255
+    (0 = noir, 255 = blanc pour un canal)
+  - .reshape(...) → donne la forme 3D : hauteur × largeur × canaux
+
+```python
+        if pix.n == 1:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif pix.n == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        else:
+            img = img[:, :, :3]
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+```
+→ pix.n = nombre de canaux de couleur :
+  - 1 canal = image en niveaux de gris → on la convertit en BGR (3 canaux)
+  - 3 canaux = RGB (Rouge Vert Bleu) → on convertit en BGR pour OpenCV
+  - autre (ex: 4 = RGBA avec transparence) → on garde les 3 premiers canaux
+    puis on convertit en BGR
+  
+  Pourquoi BGR ? OpenCV utilise l'ordre Bleu-Vert-Rouge par convention.
+
+```python
+        images.append(img)
+    return images
+```
+→ Ajoute l'image de la page dans notre liste, puis passe à la page suivante.
+  À la fin de la boucle, on retourne toutes les images.
+
+--------------------------------------------------------------------------------
+3.4 FONCTION _load_images (lignes 60-72)
+--------------------------------------------------------------------------------
+
+```python
+def _load_images(input_path: str, max_pages: Optional[int]) -> List[np.ndarray]:
+```
+→ Fonction "chef d'orchestre" pour charger les images, qu'il s'agisse
+  d'un PDF ou d'une image simple (PNG, JPG...).
+
+```python
+    if not os.path.exists(input_path):
+        raise SystemExit(f"Erreur: fichier introuvable: {input_path}")
+```
+→ Vérifie que le fichier existe. Si non → arrêt avec message d'erreur.
+  f"..." est une "f-string" : on peut mettre des variables entre {}
+  qui seront remplacées par leur valeur.
+
+```python
+    if _is_pdf(input_path):
+        images = _load_images_from_pdf(input_path, max_pages=max_pages)
+        if not images:
+            raise SystemExit("Erreur: PDF vide ou pages non lisibles.")
+        return images
+```
+→ Si c'est un PDF → appelle la fonction spécialisée PDF.
+  Si elle retourne une liste vide → erreur.
+
+```python
+    image = cv2.imread(input_path)
+    if image is None:
+        raise SystemExit("Erreur: image non lisible (format non supporté ou fichier corrompu).")
+    return [image]
+```
+→ Sinon c'est une image classique → cv2.imread() la lit.
+  Si ça échoue (retourne None) → erreur.
+  On retourne une liste avec UNE seule image (pour garder le même format
+  que pour les PDF qui peuvent avoir plusieurs pages).
+
+--------------------------------------------------------------------------------
+3.5 FONCTION _preprocess_for_ocr (lignes 75-101)
+--------------------------------------------------------------------------------
+
+C'est la fonction de PRÉ-TRAITEMENT d'image. Elle "nettoie" l'image pour
+que l'OCR la lise mieux. C'est comme nettoyer ses lunettes avant de lire !
+
+```python
+def _preprocess_for_ocr(image_bgr: np.ndarray) -> np.ndarray:
+```
+→ Prend une image BGR, retourne une image nettoyée.
+
+```python
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+```
+→ ÉTAPE 1 : Convertir en niveaux de gris.
+  Une image couleur a 3 canaux (B, G, R). En gris, il n'y a qu'un seul
+  canal (0=noir → 255=blanc). C'est plus simple à analyser pour l'OCR.
+
+```python
+    h, w = gray.shape[:2]
+    if max(h, w) < 900:
+        scale = 2
+        gray = cv2.resize(gray, (w * scale, h * scale), interpolation=cv2.INTER_CUBIC)
+```
+→ ÉTAPE 2 : Si l'image est PETITE (moins de 900 pixels de côté),
+  on la DOUBLE de taille. L'OCR a besoin que les lettres soient assez
+  grandes pour les reconnaître.
+  - h = hauteur, w = largeur
+  - cv2.resize = redimensionner
+  - INTER_CUBIC = méthode d'interpolation de bonne qualité (lisse les pixels)
+
+```python
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+```
+→ ÉTAPE 3 : FLOU GAUSSIEN légèrement. Ça peut sembler contre-intuitif,
+  mais un léger flou élimine le "bruit" (petits points parasites) de l'image.
+  (5, 5) = taille du noyau de flou (5×5 pixels).
+
+```python
+    _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+```
+→ ÉTAPE 4 : BINARISATION. Transforme l'image en NOIR ET BLANC pur
+  (pas de gris). Chaque pixel devient soit 0 (noir) soit 255 (blanc).
+  - La méthode d'OTSU trouve automatiquement le meilleur seuil.
+  - Le "_" devant la virgule = on ignore la première valeur retournée
+    (le seuil trouvé, on n'en a pas besoin).
+
+```python
+    if np.mean(th) < 127:
+        th = cv2.bitwise_not(th)
+```
+→ ÉTAPE 5 : Si l'image a un FOND SOMBRE (la moyenne des pixels < 127),
+  on INVERSE noir↔blanc. L'OCR attend du texte noir sur fond blanc.
+  np.mean = calcule la moyenne de tous les pixels.
+  bitwise_not = inverse chaque bit (0→255, 255→0).
+
+```python
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    th = cv2.morphologyEx(th, cv2.MORPH_OPEN, kernel, iterations=1)
+```
+→ ÉTAPE 6 : NETTOYAGE MORPHOLOGIQUE. Élimine les tout petits points
+  parasites restants.
+  - kernel = un petit rectangle 2×2 pixels
+  - MORPH_OPEN = "ouverture" = érode puis dilate. Ça supprime les petits
+    points blancs isolés sans affecter le texte.
+
+```python
+    return cv2.cvtColor(th, cv2.COLOR_GRAY2BGR)
+```
+→ ÉTAPE 7 : Reconvertit en 3 canaux (BGR) car PaddleOCR préfère
+  les images en couleur, même si c'est du noir et blanc.
+
+RÉSUMÉ DU PRÉ-TRAITEMENT :
+  Image couleur → Gris → Agrandir si petit → Flou → Noir/Blanc → 
+  Inverser si besoin → Nettoyer → Image BGR nettoyée
+
+--------------------------------------------------------------------------------
+3.6 FONCTION _paddle_is_usable (lignes 104-111)
+--------------------------------------------------------------------------------
+
+```python
+def _paddle_is_usable() -> bool:
+    if PaddleOCR is None:
+        return False
+    try:
+        import paddle
+    except Exception:
+        return False
+    return True
+```
+→ Vérifie si PaddleOCR est utilisable :
+  1. PaddleOCR doit être importé (pas None)
+  2. Le module "paddle" (le moteur d'IA) doit aussi être installé
+  Si les deux conditions sont remplies → True, sinon → False.
+
+--------------------------------------------------------------------------------
+3.7 FONCTION _create_paddle_ocr (lignes 114-121)
+--------------------------------------------------------------------------------
+
+```python
+def _create_paddle_ocr(lang: str):
+    if PaddleOCR is None:
+        raise RuntimeError("PaddleOCR non installé")
+    try:
+        return PaddleOCR(use_textline_orientation=True, lang=lang)
+    except TypeError:
+        return PaddleOCR(use_angle_cls=True, lang=lang)
+```
+→ Crée un objet PaddleOCR configuré pour la langue demandée.
+  - use_textline_orientation=True → détecte l'orientation du texte
+    (utile si le texte est penché ou tourné)
+  - lang=lang → la langue (ex: "fr" pour français)
+  
+  Le try/except gère la COMPATIBILITÉ entre anciennes et nouvelles versions :
+  - Nouvelles versions : use_textline_orientation
+  - Anciennes versions : use_angle_cls (même fonction, ancien nom)
+
+--------------------------------------------------------------------------------
+3.8 FONCTION _windows_ocr_available (lignes 124-134)
+--------------------------------------------------------------------------------
+
+```python
+def _windows_ocr_available() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        import winrt.windows.media.ocr
+        import winrt.windows.graphics.imaging
+        import winrt.windows.storage.streams
+        import winrt.windows.globalization
+    except Exception:
+        return False
+    return True
+```
+→ Vérifie si l'OCR Windows est disponible :
+  1. On doit être sur Windows (sys.platform == "win32")
+  2. Les 4 modules WinRT nécessaires doivent être installés
+  
+  WinRT = Windows Runtime, c'est l'interface pour utiliser les
+  fonctionnalités de Windows depuis Python.
+
+--------------------------------------------------------------------------------
+3.9 FONCTION _windows_ocr_image_text (lignes 137-193)
+--------------------------------------------------------------------------------
+
+C'est la fonction la plus COMPLEXE. Elle utilise le moteur OCR intégré
+à Windows pour extraire le texte d'une image.
+
+```python
+def _windows_ocr_image_text(image_bgr: np.ndarray, lang: str) -> str:
+```
+→ Prend une image et une langue, retourne le texte reconnu.
+
+```python
+    if not _windows_ocr_available():
+        raise RuntimeError(...)
+```
+→ Vérification de sécurité : l'OCR Windows est-il disponible ?
+
+```python
+    import asyncio
+    from winrt.windows.globalization import Language
+    from winrt.windows.graphics.imaging import BitmapDecoder
+    from winrt.windows.media.ocr import OcrEngine
+    from winrt.windows.storage.streams import DataWriter, InMemoryRandomAccessStream
+```
+→ Importe les modules nécessaires :
+  - asyncio : pour la programmation asynchrone (voir vocabulaire)
+  - Language : pour spécifier la langue de l'OCR
+  - BitmapDecoder : pour décoder une image en bitmap
+  - OcrEngine : le moteur OCR de Windows lui-même
+  - DataWriter, InMemoryRandomAccessStream : pour écrire des données en mémoire
+
+```python
+    ok, buf = cv2.imencode(".png", image_bgr)
+    if not ok:
+        return ""
+    png_bytes = buf.tobytes()
+```
+→ Convertit l'image numpy en fichier PNG en mémoire.
+  - cv2.imencode(".png", image) → encode l'image au format PNG
+  - ok = True si ça a marché
+  - buf = les données PNG brutes
+  - .tobytes() → convertit en bytes (octets), format que Windows comprend
+
+```python
+    async def _run() -> str:
+```
+→ Définit une fonction ASYNCHRONE (async). Pourquoi ? Parce que les API
+  Windows WinRT sont asynchrones : elles utilisent "await" pour attendre
+  les résultats sans bloquer.
+
+```python
+        stream = InMemoryRandomAccessStream()
+        writer = DataWriter(stream)
+        writer.write_bytes(png_bytes)
+        await writer.store_async()
+        await writer.flush_async()
+        writer.detach_stream()
+```
+→ Écrit l'image PNG dans un "flux en mémoire" (stream).
+  C'est comme créer un fichier temporaire, mais en mémoire (plus rapide).
+  - InMemoryRandomAccessStream() → crée le flux vide
+  - DataWriter(stream) → crée un "écrivain" pour ce flux
+  - write_bytes → écrit les bytes PNG
+  - store_async → stocke (sauvegarde dans le flux)
+  - flush_async → vide le tampon (s'assure que tout est écrit)
+  - detach_stream → détache l'écrivain du flux
+  Le mot "await" avant chaque opération = "attends que ça finisse"
+
+```python
+        stream.seek(0)
+        decoder = await BitmapDecoder.create_async(stream)
+        software_bitmap = await decoder.get_software_bitmap_async()
+```
+→ - seek(0) → remet le curseur au début du flux (comme rembobiner un film)
+  - BitmapDecoder.create_async → décode le PNG en image bitmap Windows
+  - get_software_bitmap_async → obtient le bitmap en mémoire
+
+```python
+        engine = None
+        try:
+            engine = OcrEngine.try_create_from_language(Language(lang))
+        except Exception:
+            engine = None
+
+        if engine is None:
+            engine = OcrEngine.try_create_from_user_profile_languages()
+        if engine is None:
+            raise RuntimeError("Impossible d'initialiser l'OCR Windows...")
+```
+→ Crée le moteur OCR :
+  1. D'abord, essaie de créer un moteur pour la langue demandée (ex: "fr")
+  2. Si ça échoue, essaie avec les langues du profil Windows de l'utilisateur
+  3. Si ça échoue encore → erreur
+
+```python
+        result = await engine.recognize_async(software_bitmap)
+        return (result.text or "").strip()
+```
+→ Lance la reconnaissance OCR sur l'image bitmap.
+  - result.text → le texte reconnu
+  - "or """ → si result.text est None, utilise "" (texte vide)
+  - .strip() → enlève les espaces/retours à la ligne au début et à la fin
+
+```python
+    try:
+        return asyncio.run(_run())
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_run())
+        finally:
+            loop.close()
+```
+→ Exécute la fonction asynchrone :
+  - asyncio.run() → méthode standard pour lancer du code async
+  - Si ça échoue (RuntimeError, ex: une boucle async existe déjà),
+    on crée manuellement une nouvelle boucle événementielle.
+  - finally → s'exécute TOUJOURS, même en cas d'erreur (pour fermer la boucle)
+
+--------------------------------------------------------------------------------
+3.10 FONCTION _extract_text_from_paddle_result (lignes 196-243)
+--------------------------------------------------------------------------------
+
+Cette fonction prend le résultat BRUT de PaddleOCR et en extrait le texte.
+
+PaddleOCR retourne ses résultats dans un format complexe :
+  [ [ [coordonnées_du_rectangle, ("texte reconnu", score_de_confiance)], ... ] ]
+
+Chaque mot reconnu est associé à :
+  - Un rectangle (les 4 coins de la zone où le mot a été trouvé)
+  - Le texte reconnu
+  - Un score de confiance (0 à 1, ex: 0.95 = 95% sûr)
+
+```python
+    if result is None:
+        return ""
+```
+→ Si aucun résultat → retourne du texte vide.
+
+```python
+    def is_word(item) -> bool:
+```
+→ Fonction INTERNE (définie à l'intérieur d'une autre).
+  Vérifie si un élément du résultat est un "mot" valide :
+  - Doit être une liste/tuple avec au moins 2 éléments
+  - Le 2e élément doit être une liste/tuple dont le 1er élément est du texte
+
+```python
+    def is_page(item) -> bool:
+```
+→ Vérifie si un élément est une "page" (une liste de mots).
+
+```python
+    pages: List[list]
+    if isinstance(result, list) and len(result) > 0 and is_page(result[0]):
+        pages = result
+    elif isinstance(result, list) and (len(result) == 0 or is_word(result[0])):
+        pages = [result]
+    else:
+        pages = []
+```
+→ Détermine la STRUCTURE du résultat :
+  - Si result[0] est une page → c'est une liste de pages
+  - Si result[0] est un mot → c'est une seule page (on l'emballe dans une liste)
+  - Sinon → liste vide
+
+  "isinstance(x, list)" vérifie si x est une liste.
+
+```python
+    lines: List[str] = []
+    for page in pages:
+        for word in page:
+            if not is_word(word):
+                continue
+            text = word[1][0]
+            if text.strip():
+                lines.append(text.strip())
+    return "\n".join(lines)
+```
+→ Parcourt toutes les pages, puis tous les mots de chaque page.
+  - word[1][0] → le texte du mot
+  - .strip() → enlève les espaces
+  - si le texte n'est pas vide → on l'ajoute à la liste
+  - "\n".join(lines) → assemble tous les mots avec des retours à la ligne
+  
+  "continue" = sauter au tour de boucle suivant (ignorer ce mot).
+
+--------------------------------------------------------------------------------
+3.11 FONCTION main (lignes 246-308)
+--------------------------------------------------------------------------------
+
+C'est la FONCTION PRINCIPALE du programme. Elle orchestre tout.
+
+```python
+def main(argv: Optional[List[str]] = None) -> int:
+```
+→ Fonction principale. Retourne un entier (0 = succès, autre = erreur).
+  argv = arguments de ligne de commande (ou None = utiliser sys.argv).
+
+--- Bloc argparse (lignes 247-278) ---
+
+```python
+    parser = argparse.ArgumentParser(description="OCR (image ou PDF) -> texte")
+```
+→ Crée un "parseur" d'arguments qui comprend les options du terminal.
+
+```python
+    parser.add_argument("--input", "-i", required=True, ...)
+    parser.add_argument("--lang", "-l", default="fr", ...)
+    parser.add_argument("--output", "-o", default=None, ...)
+    parser.add_argument("--max-pages", type=int, default=None, ...)
+    parser.add_argument("--debug-images", action="store_true", ...)
+```
+→ Définit les OPTIONS du programme :
+
+  --input (-i)  : OBLIGATOIRE. Le fichier à traiter.
+                   Ex: -i cv.pdf
+
+  --lang (-l)   : OPTIONNEL. Langue de l'OCR (défaut: "fr").
+                   Ex: -l en (pour l'anglais)
+
+  --output (-o) : OPTIONNEL. Fichier .txt où sauvegarder le résultat.
+                   Ex: -o resultat.txt
+
+  --max-pages   : OPTIONNEL. Limite le nombre de pages d'un PDF.
+                   Ex: --max-pages 3 (ne traite que les 3 premières pages)
+
+  --debug-images: OPTIONNEL. Si présent, sauvegarde les images nettoyées
+                   dans des fichiers cleaned_1.png, cleaned_2.png, etc.
+                   Utile pour comprendre pourquoi l'OCR donne de mauvais résultats.
+                   "action=store_true" → c'est un drapeau (flag) : présent = True, absent = False.
+
+```python
+    args = parser.parse_args(argv)
+```
+→ Analyse (parse) les arguments. Après cette ligne, on peut utiliser :
+  args.input, args.lang, args.output, args.max_pages, args.debug_images
+
+--- Chargement des images (ligne 280) ---
+
+```python
+    images = _load_images(args.input, max_pages=args.max_pages)
+```
+→ Charge les images depuis le fichier d'entrée.
+
+--- Choix du moteur OCR (lignes 282-291) ---
+
+```python
+    backend: str
+    ocr = None
+    if _paddle_is_usable():
+        try:
+            ocr = _create_paddle_ocr(args.lang)
+            backend = "paddle"
+        except Exception:
+            ocr = None
+            backend = "windows"
+    else:
+        backend = "windows"
+```
+→ Choisit quel moteur OCR utiliser :
+  1. Si PaddleOCR est disponible → on l'utilise (backend = "paddle")
+  2. Sinon → on bascule sur Windows OCR (backend = "windows")
+  "backend" = le "moteur" utilisé en arrière-plan.
+
+```python
+    if backend == "windows" and not _windows_ocr_available():
+        raise SystemExit(...)
+```
+→ Si on n'a NI PaddleOCR NI Windows OCR → on ne peut rien faire → erreur.
+
+--- Boucle d'extraction (lignes 298-306) ---
+
+```python
+    extracted_pages: List[str] = []
+    for idx, img in enumerate(images, start=1):
+```
+→ Parcourt chaque image avec son numéro (idx = 1, 2, 3...).
+  "enumerate" ajoute un compteur à la boucle.
+
+```python
+        cleaned = _preprocess_for_ocr(img)
+```
+→ Nettoie l'image pour l'OCR.
+
+```python
+        if args.debug_images:
+            cv2.imwrite(f"cleaned_{idx}.png", cleaned)
+```
+→ Si --debug-images est activé, sauvegarde l'image nettoyée.
+
+```python
+        if backend == "paddle":
+            result = ocr.ocr(cleaned, cls=True)
+            extracted_pages.append(_extract_text_from_paddle_result(result))
+        else:
+            extracted_pages.append(_windows_ocr_image_text(cleaned, args.lang))
+```
+→ Selon le moteur choisi :
+  - PaddleOCR → appelle ocr.ocr() puis extrait le texte
+  - Windows → appelle _windows_ocr_image_text()
+  Ajoute le texte extrait dans la liste.
+
+--- Affichage et sauvegarde (lignes 308-316) ---
+
+```python
+    text = "\n\n".join([t for t in extracted_pages if t.strip()]).strip()
+```
+→ Assemble le texte de toutes les pages :
+  - [t for t in extracted_pages if t.strip()] → garde seulement les pages
+    non vides (c'est une "list comprehension", un raccourci Python)
+  - "\n\n".join(...) → les sépare par 2 retours à la ligne
+  - .strip() → enlève les espaces au début/fin
+
+```python
+    print("\n===== TEXTE EXTRAIT =====\n")
+    print(text)
+```
+→ Affiche le texte dans le terminal.
+
+```python
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.write("\n")
+        print(f"\nTexte sauvegardé dans: {args.output}")
+```
+→ Si un fichier de sortie a été demandé :
+  - open(..., "w", encoding="utf-8") → ouvre le fichier en écriture, encodage UTF-8
+    (UTF-8 gère les accents français comme é, è, ê, etc.)
+  - "with" → ouvre le fichier et le FERME automatiquement à la fin du bloc
+  - f.write(text) → écrit le texte
+  - Affiche un message de confirmation
+
+```python
+    return 0
+```
+→ Retourne 0 = tout s'est bien passé (convention informatique :
+  0 = succès, autre nombre = erreur).
+
+--------------------------------------------------------------------------------
+3.12 LE POINT D'ENTRÉE (lignes 311-312)
+--------------------------------------------------------------------------------
+
+```python
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+→ C'est le POINT DE DÉPART du programme.
+
+  "__name__" est une variable spéciale de Python :
+  - Quand tu exécutes "python main.py", __name__ vaut "__main__"
+  - Quand un autre fichier fait "import main", __name__ vaut "main"
+
+  Donc ce bloc ne s'exécute QUE quand on lance directement le fichier.
+  
+  "raise SystemExit(main())" :
+  1. Appelle main() → exécute tout le programme
+  2. main() retourne 0 (ou un code d'erreur)
+  3. SystemExit(0) → dit à Python de quitter avec le code 0
+
+================================================================================
+4. COMMENT UTILISER LE PROGRAMME
+================================================================================
+
+Ouvre un terminal (PowerShell) dans le dossier du projet, puis :
+
+--- Cas de base : OCR d'un PDF en français ---
+  python main.py -i cv.pdf -l fr -o resultat.txt
+
+--- OCR d'une image en anglais ---
+  python main.py -i photo.png -l en -o output.txt
+
+--- PDF, seulement les 2 premières pages ---
+  python main.py -i document.pdf -l fr -o texte.txt --max-pages 2
+
+--- Mode debug (sauvegarder les images pré-traitées) ---
+  python main.py -i cv.pdf -l fr -o texte.txt --debug-images
+  → Crée cleaned_1.png, cleaned_2.png, etc. pour voir ce que l'OCR "voit"
+
+--- Juste afficher le texte (sans sauvegarder) ---
+  python main.py -i cv.pdf -l fr
+
+LANGUES SUPPORTÉES (exemples) :
+  fr = français
+  en = anglais
+  ar = arabe
+  es = espagnol
+  de = allemand
+
+================================================================================
+5. RÉSUMÉ DU FLUX COMPLET
+================================================================================
+
+Voici ce qui se passe quand tu tapes :
+  python main.py -i cv.pdf -l fr -o out.txt --max-pages 1
+
+ÉTAPE 1 : ANALYSE DES ARGUMENTS
+  → argparse lit "-i cv.pdf -l fr -o out.txt --max-pages 1"
+  → input="cv.pdf", lang="fr", output="out.txt", max_pages=1
+
+ÉTAPE 2 : CHARGEMENT
+  → Le fichier cv.pdf est ouvert par PyMuPDF
+  → La page 1 est convertie en image (tableau numpy BGR)
+  → Résultat : une liste avec 1 image
+
+ÉTAPE 3 : CHOIX DU MOTEUR
+  → PaddleOCR disponible ? Non (Python 3.14, pas compatible)
+  → Windows OCR disponible ? Oui (les modules WinRT sont installés)
+  → Moteur choisi : "windows"
+
+ÉTAPE 4 : PRÉ-TRAITEMENT
+  → L'image passe par le pipeline :
+    Couleur → Gris → (Agrandir si petit) → Flou → Noir/Blanc →
+    (Inverser si fond sombre) → Nettoyage → BGR
+
+ÉTAPE 5 : OCR
+  → L'image nettoyée est envoyée au moteur OCR Windows
+  → Windows analyse l'image et reconnaît les caractères
+  → Résultat : du texte brut
+
+ÉTAPE 6 : RÉSULTAT
+  → Le texte est affiché dans le terminal
+  → Le texte est sauvegardé dans out.txt
+
+================================================================================
+FIN DE L'EXPLICATION
+================================================================================
+
+Si tu as des questions, n'hésite pas à expérimenter :
+  - Active --debug-images pour voir les images nettoyées
+  - Change la langue avec -l
+  - Essaie avec différents fichiers PDF ou images
+
+Bonne continuation dans ton apprentissage de Python ! 🐍
