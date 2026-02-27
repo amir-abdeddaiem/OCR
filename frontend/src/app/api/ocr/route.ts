@@ -4,6 +4,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { existsSync } from "fs";
+import { initDB, saveExtraction } from "@/lib/db";
 
 const PYTHON = process.env.PYTHON_PATH || "python";
 // Resolve the project root (one level up from frontend/)
@@ -70,6 +71,27 @@ export async function POST(req: NextRequest) {
 
     // Add the original filename from the upload
     data.filename = file.name;
+
+    // Save to Neon PostgreSQL
+    try {
+      await initDB();
+      const factureId = await saveExtraction({
+        filename: data.filename,
+        type_facture: data.type_facture || "inconnu",
+        fournisseur: data.fournisseur || null,
+        periode: data.periode || null,
+        reference_facture: data.reference_facture || null,
+        reference_client: data.reference_client || null,
+        adresse: data.adresse || null,
+        emission_co2_kg: data.emission_co2_kg ?? null,
+        score_global: data.score_global ?? 0,
+        donnees: data.donnees || [],
+      });
+      data.facture_id = factureId;
+      console.log(`[/api/ocr] Saved to DB: facture_id=${factureId}`);
+    } catch (dbErr: any) {
+      console.error("[/api/ocr] DB save failed (non-blocking):", dbErr.message);
+    }
 
     return NextResponse.json(data);
   } catch (err: any) {
