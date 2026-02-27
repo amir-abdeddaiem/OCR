@@ -1,7 +1,14 @@
 import argparse
+import json
 import os
 import sys
 from typing import List, Optional
+
+# Forcer UTF-8 sur stdout/stderr (Windows CP1252 ne gère pas les caractères spéciaux)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import cv2
 import numpy as np
@@ -10,6 +17,8 @@ try:
     from paddleocr import PaddleOCR
 except Exception:
     PaddleOCR = None  # type: ignore[assignment]
+
+from extractor import extraire_donnees_environnementales
 
 # Extensions d'images supportées par OpenCV
 _SUPPORTED_IMAGE_EXTS = {
@@ -29,10 +38,10 @@ def _is_supported(path: str) -> bool:
     return ext in _SUPPORTED_EXTS
 
 
-def _make_output_path(input_path: str) -> str:
-    """Génère automatiquement le chemin de sortie: input.pdf -> input_ocr.txt"""
+def _make_output_path(input_path: str, suffix: str = "_ocr.txt") -> str:
+    """Génère automatiquement le chemin de sortie."""
     base, _ = os.path.splitext(input_path)
-    return base + "_ocr.txt"
+    return base + suffix
 
 
 def _load_images_from_pdf(pdf_path: str, max_pages: Optional[int]) -> List[np.ndarray]:
@@ -108,8 +117,16 @@ def _preprocess_light(image_bgr: np.ndarray) -> np.ndarray:
             image_bgr, (w * scale, h * scale), interpolation=cv2.INTER_CUBIC
         )
 
+    # Convertir en LAB pour rehausser le contraste sans altérer les couleurs
+    lab = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2LAB)
+    l_chan, a_chan, b_chan = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_chan = clahe.apply(l_chan)
+    enhanced = cv2.merge([l_chan, a_chan, b_chan])
+    enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+
     # Léger débruitage qui préserve les bords du texte
-    denoised = cv2.fastNlMeansDenoisingColored(image_bgr, None, 10, 10, 7, 21)
+    denoised = cv2.fastNlMeansDenoisingColored(enhanced_bgr, None, 8, 8, 7, 21)
     return denoised
 
 
@@ -186,6 +203,18 @@ def _detect_language_windows() -> Optional[str]:
     return None
 
 
+def _get_available_ocr_languages() -> List[str]:
+    """Retourne la liste des tags de langues OCR disponibles sur Windows."""
+    if not _windows_ocr_available():
+        return []
+    try:
+        from winrt.windows.media.ocr import OcrEngine
+        langs = OcrEngine.available_recognizer_languages
+        return [l.language_tag for l in langs] if langs else []
+    except Exception:
+        return []
+
+
 def _windows_ocr_image_text(image_bgr: np.ndarray, lang: Optional[str]) -> str:
     if not _windows_ocr_available():
         raise RuntimeError(
@@ -206,39 +235,120 @@ def _windows_ocr_image_text(image_bgr: np.ndarray, lang: Optional[str]) -> str:
         return ""
     png_bytes = buf.tobytes()
 
-    async def _run() -> str:
+    async def _get_bitmap():
         stream = InMemoryRandomAccessStream()
         writer = DataWriter(stream)
         writer.write_bytes(png_bytes)
         await writer.store_async()
         await writer.flush_async()
         writer.detach_stream()
-
         stream.seek(0)
         decoder = await BitmapDecoder.create_async(stream)
-        software_bitmap = await decoder.get_software_bitmap_async()
+        return await decoder.get_software_bitmap_async()
 
+    async def _ocr_single(bitmap, language_tag: Optional[str]) -> str:
         engine = None
-        # Si une langue est spécifiée, essayer de l'utiliser
-        if lang:
+        if language_tag:
             try:
-                engine = OcrEngine.try_create_from_language(Language(lang))
+                engine = OcrEngine.try_create_from_language(Language(language_tag))
             except Exception:
                 engine = None
-
-        # Sinon, ou si ça a échoué, utiliser les langues du système
         if engine is None:
             engine = OcrEngine.try_create_from_user_profile_languages()
         if engine is None:
-            raise RuntimeError("Impossible d'initialiser l'OCR Windows (langues système manquantes ?)")
-
-        result = await engine.recognize_async(software_bitmap)
+            return ""
+        result = await engine.recognize_async(bitmap)
         return (result.text or "").strip()
+
+    async def _run() -> str:
+        bitmap = await _get_bitmap()
+
+        # Si une langue est spécifiée, OCR simple
+        if lang:
+            return await _ocr_single(bitmap, lang)
+
+        # Mode bilingual : détecter toutes les langues disponibles et
+        # faire une passe par langue, puis fusionner
+        available = _get_available_ocr_languages()
+        if len(available) <= 1:
+            return await _ocr_single(bitmap, available[0] if available else None)
+
+        # Passe multi-langue : FR d'abord (données principales),
+        # puis les autres langues pour compléter
+        results: dict[str, str] = {}
+        # Prioriser fr > en > ar > reste
+        priority = []
+        for pref in ["fr", "en", "ar"]:
+            for tag in available:
+                if tag.startswith(pref) and tag not in priority:
+                    priority.append(tag)
+        for tag in available:
+            if tag not in priority:
+                priority.append(tag)
+
+        for tag in priority:
+            try:
+                bitmap_copy = await _get_bitmap()  # Bitmap frais pour chaque passe
+                text = await _ocr_single(bitmap_copy, tag)
+                if text:
+                    results[tag] = text
+            except Exception:
+                pass
+
+        if not results:
+            return await _ocr_single(bitmap, None)
+
+        # Fusionner intelligemment :
+        # - FR (ou EN) = texte principal avec données chiffrées
+        # - AR = ajouter UNIQUEMENT les lignes contenant de l'arabe
+        #   (le reste est une ré-OCR dégradée du français)
+        import re as _re
+        _arabic_re = _re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]')
+
+        if len(results) == 1:
+            return list(results.values())[0]
+
+        # Prendre FR comme base, sinon EN, sinon premier disponible
+        base_tag = None
+        for pref in ["fr", "en"]:
+            for tag in priority:
+                if tag.startswith(pref) and tag in results:
+                    base_tag = tag
+                    break
+            if base_tag:
+                break
+        if not base_tag:
+            base_tag = list(results.keys())[0]
+
+        base_text = results[base_tag]
+        base_lines_lower = set(
+            l.strip().lower() for l in base_text.split("\n") if l.strip()
+        )
+
+        extra_lines: List[str] = []
+        for tag, text in results.items():
+            if tag == base_tag:
+                continue
+            for line in text.split("\n"):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                # Pour la passe arabe : n'ajouter que les lignes
+                # qui contiennent effectivement de l'arabe
+                if tag.startswith("ar"):
+                    if _arabic_re.search(stripped) and stripped.lower() not in base_lines_lower:
+                        extra_lines.append(stripped)
+                        base_lines_lower.add(stripped.lower())
+                # Pour les autres langues : ignorer (doublon du FR)
+
+        combined = base_text
+        if extra_lines:
+            combined += "\n" + "\n".join(extra_lines)
+        return combined
 
     try:
         return asyncio.run(_run())
     except RuntimeError:
-        # Fallback si une boucle asyncio existe déjà (rare en script)
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(_run())
@@ -288,13 +398,13 @@ def _extract_text_from_paddle_result(result) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="OCR (image ou PDF) -> texte. Supporte: PDF, JPG, PNG, WEBP, BMP, TIFF, etc.",
+        description="OCR intelligent : extrait le texte ou analyse les données carbone d'une facture.",
         epilog=(
             "Exemples:\n"
-            "  python main.py -i cv.pdf                  (auto-détecte la langue, toutes les pages)\n"
-            "  python main.py -i photo.jpg                (image simple)\n"
-            "  python main.py -i doc.pdf -l en -o out.txt (anglais, sortie personnalisée)\n"
-            "  python main.py -i scan.webp --max-pages 3  (limiter les pages)"
+            "  python main.py -i facture.pdf                    (OCR simple)\n"
+            "  python main.py -i facture.pdf --carbon            (extraction carbone)\n"
+            "  python main.py -i facture.jpg --carbon -o res.json\n"
+            "  python main.py -i scan.webp --max-pages 3"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -327,10 +437,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Sauvegarde les images pré-traitées (utile pour diagnostiquer l'OCR).",
     )
+    parser.add_argument(
+        "--carbon",
+        action="store_true",
+        help="Mode carbone : extrait les données environnementales et calcule les émissions CO₂.",
+    )
     args = parser.parse_args(argv)
 
     # --- Sortie automatique si non spécifiée ---
-    output_path = args.output if args.output else _make_output_path(args.input)
+    if args.output:
+        output_path = args.output
+    elif args.carbon:
+        output_path = _make_output_path(args.input, "_carbone.json")
+    else:
+        output_path = _make_output_path(args.input, "_ocr.txt")
 
     # --- Charger toutes les pages ---
     images = _load_images(args.input, max_pages=args.max_pages)
@@ -363,13 +483,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "Option 1 (recommandé): installer Python 3.10/3.11 puis: pip install paddlepaddle paddleocr pymupdf opencv-python\n"
                 "Option 2: installer les wheels WinRT: pip install winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Globalization"
             )
-        detected = _detect_language_windows()
+        available_langs = _get_available_ocr_languages()
         if lang:
             print(f"[INFO] Moteur OCR: Windows OCR (langue: {lang})")
-        elif detected:
-            print(f"[INFO] Moteur OCR: Windows OCR (langue auto-détectée: {detected})")
+        elif len(available_langs) > 1:
+            print(f"[INFO] Moteur OCR: Windows OCR MULTILINGUE ({', '.join(available_langs)})")
         else:
-            print("[INFO] Moteur OCR: Windows OCR (langue du système)")
+            detected = _detect_language_windows()
+            if detected:
+                print(f"[INFO] Moteur OCR: Windows OCR (langue auto-détectée: {detected})")
+            else:
+                print("[INFO] Moteur OCR: Windows OCR (langue du système)")
 
     # --- Extraction du texte ---
     extracted_pages: List[str] = []
@@ -392,6 +516,26 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     text = "\n\n".join([t for t in extracted_pages if t.strip()]).strip()
 
+    # --- Mode Carbone ---
+    if args.carbon:
+        print("\n[INFO] Analyse environnementale en cours...")
+        resultat = extraire_donnees_environnementales(text)
+
+        print("\n" + "=" * 60)
+        print("       ANALYSE BILAN CARBONE")
+        print("=" * 60 + "\n")
+        print(resultat.resume)
+
+        # Sauvegarder le JSON structuré
+        json_data = resultat.to_dict()
+        json_data["texte_ocr_brut"] = text
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        print(f"\nDonnées JSON sauvegardées dans: {output_path}")
+        return 0
+
+    # --- Mode OCR classique ---
     print("\n===== TEXTE EXTRAIT =====\n")
     print(text)
 

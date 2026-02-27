@@ -1,0 +1,61 @@
+{
+  "type_facture": "electricite",
+  "fournisseur": "STEG",
+  "periode": "2024-05-08 au 2024-07-09",
+  "donnees": [
+    {
+      "champ": "Type d'énergie",
+      "valeur": "Électricité (réseau) + Gaz naturel",
+      "unite": null,
+      "confiance": 0.9
+    },
+    {
+      "champ": "Énergie consommée (électricité)",
+      "valeur": "483",
+      "unite": "kWh",
+      "confiance": 0.9
+    },
+    {
+      "champ": "Montant à payer",
+      "valeur": "595.000",
+      "unite": "DT",
+      "confiance": 1.0
+    },
+    {
+      "champ": "Sous-total gaz",
+      "valeur": "1.000",
+      "unite": "DT",
+      "confiance": 0.7
+    },
+    {
+      "champ": "Émissions CO₂ (electricite)",
+      "valeur": "229.425",
+      "unite": "kg CO₂",
+      "confiance": 0.75
+    }
+  ],
+  "emission_co2_kg": 229.425,
+  "facteur_emission_utilise": "0.475 kg CO₂/kWh",
+  "source_facteur": "ANME / IEA 2024 — mix électrique Tunisie",
+  "resume": "[ELEC] [GAZ] Facture Électricité (réseau) + Gaz naturel\nFournisseur : STEG\nPeriode : 2024-05-08 au 2024-07-09\nClient/District : 71514633\nAdresse : نهج 16 عبدالرحمان بن بشير llllllllllllllllllllllllllllllllll lll\n\n  • Type d'énergie : Électricité (réseau) + Gaz naturel [90%]\n  • Énergie consommée (électricité) : 483 kWh [90%]\n  • Montant à payer : 595.000 DT [100%]\n  • Sous-total gaz : 1.000 DT [70%]\n  • Émissions CO₂ (electricite) : 229.425 kg CO₂ [75%]\n\n─── Bilan CO₂ détaillé ───\n  electricite     :    483.0 kWh   × 0.475 = 229.425 kg CO₂\n  TOTAL           : 229.425 kg CO₂ (0.2294 tonnes)\n   Facteur(s) : 0.475 kg CO₂/kWh\n   Source(s) : ANME / IEA 2024 — mix électrique Tunisie\n\nScore de confiance global : 98%",
+  "reference_facture": null,
+  "reference_client": "71514633",
+  "adresse": "نهج 16 عبدالرحمان بن بشير llllllllllllllllllllllllllllllllll lll",
+  "types_energie": [
+    "electricite",
+    "gaz_naturel"
+  ],
+  "detail_co2": [
+    {
+      "type": "electricite",
+      "consommation": 483.0,
+      "unite": "kWh",
+      "facteur": 0.475,
+      "co2_kg": 229.425,
+      "source": "ANME / IEA 2024 — mix électrique Tunisie"
+    }
+  ],
+  "score_global": 0.98,
+  "alertes": [],
+  "texte_ocr_brut": "Imprimer 4 Référence : Société Tunisienne du Gaz 07283 740 0 F a c ture NODépannage : District 71514633 BARDO FACTURE SUR RELEVE 2024-07-09 : 2024-05-08 : CONSOMMATION & SERVICES Montant Moyenne P.C.(3) Mensuelle (2) 0.218 0.700 Electricité Quantité (1) 483 Index Nouveau Ancien Nbre de Mois 2 2 Puissance / Débit 7 13 19 115.094 115.094 139.006 HT(4) 105.294 9.800 53326 52843 Total Total Gaz Mt .2024 Total Services otal Consommation & Services MONTANT TOTAL Libellés Electricité 012408 ECUAIRAGE Redevances Fixes ecuAtRAGE Gaz Redevances Fixes 'E Services Taxes i' 456.445 Arriérés 2.415 3.532 Paiements précédents 0 2.415 ts.ssc 11.875 23.912 CINQ CENTS QUATRE-VINGT- 595.000 QUINZE DINARS ZERO MI.LIMFS, Montant à payer Poste 0701 Code Fermer Io fenêtre I 483 Contribution CL Contribution RTT FTE (Electricité) FTE (Gaz) TVA TOTAL TAXES 2024-08-02 Bulletin de versement CCP 1985/8/22 62 2024-09-06 595.000 Montant 0000070072837400 Référence 9K Clé\néSocIét TunisIenne fEkctricitéet& duGaz دسة التو الشكة والضائ للهربا Fa cture llmorimer ؛ ل ور Référence : خزندار عشور ب طاهر نهج 16 عبدالرحمان بن بشير llllllllllllllllllllllllllllllllll llll llllllllll IIIIIIIIIIIIIIIIIIIIIIIIII CONSOMMATION SERVICES& N0Dépannage : District ٤ 71514633 BARDO FACTURE SUR RELEVE 2024-07-09 : إلي 2024-05-08 : من الخدمات و الإستهلاك إستا لسنغ Montant (4)HT الوحدة سعر Moyenne (3).).P MensueIIe (2) éElectricit éQuantit 483 lndex هدى أرقام Nouveau Ancien ن نن عمد Nbre de Mois 2 2 الذز و كر» على /Puissance 13 1iS.O94 1IS.O94 Total Total Gaz 1,Ecbea•ce e••t••» 024. لننون 51 لتفصل طن ت Total Services LibeIlés éElectricit 012408 ECLAIRAGE Redev•nces Fixes لزة(s)/ لمعلم ECLAtRAGE الكهرباءر11) مجموع غ Redevances Fixes (5) لثد سعنهم الغردده) مجموع ى من بصدق المديم بتاب مم ام: الخدساتر13) مجموع الخدماره1) و الإسئهلاك مجموع otal Consommation Services& MONTANT TOTAL المبنغ(1) 4S6.44S+ Arriérés مسد(17) مير دين Paiements précédents ماقةرى) دفوعك iS.SSC ll ll llllllllll IIIIIIIIIIIIIIIIIIIIIIIII Fermcr) وI fcnétrc 483 ContributionCL Contribution RTT FTE (éElectricit) FTE (6) TOTAL TAXES Taxes / الأاءات المطية() الجماعات مساهمة التلقزةوى و لإذاعة مطوم الطلي(كهرياء)(م) الإثتفل صندوق الطئي(غر)رم الإنتذل صندوق سمضئةر1a) لنيمة على الأاءات(15) مجموع العدار لقراءة المفبل الناريخ 06—09—2024 جدي بحسي إيداع بطالة BuIIetin de versement CCP 1985/8/22 في مم 62 ع لرعيس Montant ى"
+}
