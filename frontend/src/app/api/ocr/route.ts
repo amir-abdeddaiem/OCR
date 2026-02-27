@@ -7,8 +7,8 @@ import { existsSync } from "fs";
 import { initDB, saveExtraction } from "@/lib/db";
 
 const PYTHON = process.env.PYTHON_PATH || "python";
-// Resolve the project root (one level up from frontend/)
-const PROJECT_ROOT = join(process.cwd(), "..");
+// PROJECT_ROOT: parent of frontend/ — works both locally and in Docker (/app)
+const PROJECT_ROOT = process.env.PROJECT_ROOT || join(process.cwd(), "..");
 
 export async function POST(req: NextRequest) {
   let tmpInputPath = "";
