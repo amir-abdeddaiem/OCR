@@ -224,11 +224,49 @@ export default function Home() {
   const [showRaw, setShowRaw] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /* Demo sample result for static deployment */
+  const DEMO_RESULT: CarbonResult = {
+    filename: "demo_steg.webp",
+    type_facture: "electricite",
+    fournisseur: "STEG",
+    periode: "2024-05-08 au 2024-07-09",
+    donnees: [
+      { champ: "Type d'énergie", valeur: "Électricité (réseau)", unite: null, confiance: 0.90 },
+      { champ: "Énergie consommée (électricité)", valeur: "483", unite: "kWh", confiance: 0.90 },
+      { champ: "Montant à payer", valeur: "595.000", unite: "DT", confiance: 1.0 },
+      { champ: "Émissions CO₂ (electricite)", valeur: "229.425", unite: "kg CO₂", confiance: 0.75 },
+    ],
+    emission_co2_kg: 229.425,
+    facteur_emission_utilise: "0.475 kg CO₂/kWh",
+    source_facteur: "ANME / IEA 2024 — mix électrique Tunisie",
+    resume: "[ELEC] Facture Électricité (réseau)\nFournisseur : STEG\nPériode : 2024-05-08 au 2024-07-09",
+    texte_ocr_brut: "(Texte OCR brut non disponible en mode démonstration)",
+    reference_facture: "072837400",
+    reference_client: "71514633",
+    adresse: null,
+    types_energie: ["electricite"],
+    detail_co2: [
+      { type: "electricite", consommation: 483, unite: "kWh", facteur: 0.475, co2_kg: 229.425, source: "ANME / IEA 2024 — mix électrique Tunisie" },
+    ],
+    score_global: 0.98,
+    alertes: [],
+  };
+
+  const isLocalDev = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
   const processFile = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
     setResult(null);
     setShowRaw(false);
+
+    if (!isLocalDev) {
+      // Static demo mode — show sample result after a brief animation
+      await new Promise(r => setTimeout(r, 1500));
+      setResult({ ...DEMO_RESULT, filename: file.name });
+      setLoading(false);
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", file);
@@ -242,11 +280,11 @@ export default function Home() {
       }
       setResult(data);
     } catch {
-      setError("Impossible de contacter le serveur.");
+      setError("Impossible de contacter le serveur. Vérifiez que le backend local est démarré (npm run dev dans frontend/).");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isLocalDev]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -286,6 +324,13 @@ export default function Home() {
             une extraction intelligente des donnees environnementales + estimation
             des emissions CO2.
           </p>
+          {!isLocalDev && (
+            <div className="mt-4 rounded-lg bg-sky-500/10 border border-sky-500/30 px-4 py-3 text-sm text-sky-300 max-w-xl mx-auto">
+              <strong>Mode demonstration</strong> — L&apos;OCR nécessite un backend Python local.
+              Deposez un fichier pour voir un exemple de résultat.
+              Pour le traitement réel, lancez le projet localement.
+            </div>
+          )}
         </div>
 
         {/* ── Upload Zone ── */}
